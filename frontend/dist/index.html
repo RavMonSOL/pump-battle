@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PumpBattle — TCG Token Arena</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Inter:wght@400;600;800&family=Space+Grotesk:wght@500;700&display=swap');
+
+      :root {
+        --card-width: 340px;
+        --card-height: 520px;
+      }
+
+      body {
+        background: radial-gradient(ellipse at top, #1a1a2e 0%, #0f0f1a 50%, #000000 100%);
+        min-height: 100vh;
+      }
+
+      .tcg-card {
+        width: var(--card-width);
+        height: var(--card-height);
+        background: linear-gradient(165deg, #0f0f1a 0%, #16162a 40%, #1a1a3a 100%);
+        border-radius: 20px;
+        box-shadow: 0 25px 50px -12px rgba(0,0,0,0.7), inset 0 0 0 1px rgba(255,255,255,0.08);
+        position: relative;
+        overflow: hidden;
+        border: 3px solid transparent;
+        transition: all 0.4s cubic-bezier(0.34,1.56,0.64,1);
+      }
+
+      .tcg-card:hover {
+        transform: translateY(-12px) scale(1.01) rotate(0.5deg);
+        box-shadow: 0 35px 60px -15px rgba(0,0,0,0.8), 0 0 60px rgba(var(--glow-color),0.3), inset 0 0 0 1px rgba(255,255,255,0.12);
+      }
+
+      .card-glow {
+        position: absolute; inset: -100%;
+        background: conic-gradient(from 0deg, transparent 0deg, rgba(var(--glow-color),0.15) 30deg, transparent 60deg, rgba(var(--glow-color),0.1) 120deg, transparent 180deg, rgba(var(--glow-color),0.15) 240deg, transparent 300deg);
+        animation: rotate 12s linear infinite;
+        pointer-events: none; filter: blur(30px); opacity: 0.8;
+      }
+
+      @keyframes rotate { 100% { transform: rotate(360deg); } }
+
+      .cost-badge, .rarity-badge {
+        position: absolute;
+        top: 27px; width: 28px; height: 28px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        border: 2px solid rgba(255,255,255,0.4);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4), inset 0 2px 4px rgba(255,255,255,0.3);
+        font-family: 'Space Grotesk', sans-serif;
+        font-weight: 800; font-size: 12px; color: white; text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        z-index: 20;
+      }
+
+      .cost-badge { left: 27px; background: radial-gradient(circle at 30% 30%, #fbbf24, #f59e0b, #d97706); }
+
+      .rarity-badge { right: 27px; background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.4), transparent 50%), radial-gradient(circle, var(--rarity-color)); }
+
+      .type-badge {
+        padding: 8px 20px;
+        border-radius: 24px;
+        font-family: 'Space Grotesk', sans-serif;
+        font-size: 12px; font-weight: 700;
+        text-transform: uppercase; letter-spacing: 1.5px; color: white;
+        background: linear-gradient(135deg, rgba(0,0,0,0.7), rgba(0,0,0,0.4));
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.25);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      }
+
+      .type-badge-container {
+        position: absolute; top: 20px; left: 20px; right: 20px;
+        display: flex; align-items: center; justify-content: center; z-index: 20; pointer-events: none;
+      }
+
+      .image-frame {
+        position: absolute; top: 68px; left: 24px; right: 24px; height: 210px;
+        background: linear-gradient(145deg, #0a0a12, #121220);
+        border-radius: 14px; overflow: hidden; border: 2px solid rgba(255,255,255,0.1);
+        box-shadow: inset 0 2px 8px rgba(0,0,0,0.5); z-index: 5;
+      }
+
+      .card-title {
+        position: absolute; top: 290px; left: 24px; right: 24px;
+        font-family: Cinzel, serif; font-size: 17px; font-weight: 900; text-align: center;
+        color: white; text-shadow: 0 2px 8px rgba(0,0,0,0.8), 0 0 40px rgba(255,255,255,0.1);
+        margin: 0; letter-spacing: 1.5px; line-height: 1.2; z-index: 20;
+      }
+
+      .card-subtitle {
+        position: absolute; top: 316px; left: 24px; right: 24px; text-align: center;
+        font-family: 'Space Grotesk', sans-serif; font-size: 9px; font-weight: 500;
+        text-transform: uppercase; letter-spacing: 2px; color: rgba(255,255,255,0.5); z-index: 20;
+      }
+
+      .ability-box, .resistance-box { position: absolute; left: 24px; right: 24px; padding: 6px 10px;
+        border-radius: 6px; border: 1px solid; z-index: 20; text-align: center; font-size: 10px;
+      }
+
+      .ability-box { top: 338px; background: linear-gradient(135deg, rgba(168,85,247,0.15), rgba(168,85,247,0.05)); color: #c084fc; border-color: rgba(168,85,247,0.4); box-shadow: 0 4px 12px rgba(168,85,247,0.2); }
+
+      .resistance-box { top: 360px; padding: 5px 10px; background: linear-gradient(135deg, rgba(239,68,68,0.2), rgba(239,68,68,0.05)); border-radius: 5px; color: #f87171; border-color: rgba(239,68,68,0.4); display: flex; justify-content: space-between; align-items: center; font-size: 9px; box-shadow: 0 4px 12px rgba(239,68,68,0.15); }
+
+      .resistance-label { text-transform: uppercase; font-size: 8px; }
+
+      .resistance-value { color: #ef4444; font-weight: 800; font-size: 9px; }
+
+      .card-description {
+        position: absolute; top: 382px; left: 24px; right: 24px; padding: 8px 12px;
+        background: rgba(0,0,0,0.3); backdrop-filter: blur(8px); border-radius: 6px;
+        font-family: Inter, sans-serif; font-size: 9px; line-height: 1.4; color: rgba(255,255,255,0.7);
+        border: 1px solid rgba(255,255,255,0.06); z-index: 20; max-height: 55px; overflow-y: auto;
+      }
+
+      .stats-bar {
+        position: absolute; top: 445px; left: 24px; right: 24px;
+        display: flex; justify-content: center; gap: 16px; z-index: 20;
+      }
+
+      .stat-box {
+        min-width: 60px; padding: 6px 12px; border-radius: 18px;
+        background: linear-gradient(135deg, rgba(0,0,0,0.6), rgba(0,0,0,0.3));
+        backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.15);
+        text-align: center; box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+      }
+
+      .stat-label { font-family: 'Space Grotesk', sans-serif; font-size: 7px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; color: rgba(255,255,255,0.5); margin-bottom: 1px; }
+
+      .stat-value { font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 800; color: white; line-height: 1; }
+
+      .edition-number { position: absolute; bottom: 16px; right: 20px; font-family: 'Space Grotesk', sans-serif; font-size: 8px; font-weight: 500; color: rgba(255,255,255,0.3); letter-spacing: 1px; z-index: 15; }
+
+      .neon-text {
+        text-shadow: 0 0 10px currentColor, 0 0 20px currentColor, 0 0 30px currentColor;
+      }
+
+      .card-frame {
+        position: absolute; inset: 14px;
+        border: 1px solid rgba(255,255,255,0.12); border-radius: 16px;
+        pointer-events: none; z-index: 10;
+      }
+
+      .corner-ornament {
+        position: absolute; width: 28px; height: 28px; border: 2px solid rgba(255,255,255,0.3); z-index: 11;
+      }
+
+      .corner-ornament.top-left { top: 22px; left: 22px; border-right:none; border-bottom:none; border-top-left-radius:10px; }
+
+      .corner-ornament.top-right { top: 22px; right: 22px; border-left:none; border-bottom:none; border-top-right-radius:10px; }
+
+      .corner-ornament.bottom-left { bottom: 22px; left: 22px; border-right:none; border-top:none; border-bottom-left-radius:10px; }
+
+      .corner-ornament.bottom-right { bottom: 22px; right: 22px; border-left:none; border-top:none; border-bottom-right-radius:10px; }
+
+      .card-noise {
+        position: absolute; inset: 0; opacity: 0.015; pointer-events: none; z-index: 1;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+      }
+    </style>
+    <script type="module" crossorigin src="/assets/index-rZ5AfFnu.js"></script>
+  </head>
+  <body class="text-slate-200">
+    <div id="app" class="min-h-screen flex flex-col">
+      <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center font-bold text-white text-xl shadow-lg">P</div>
+            <h1 class="text-2xl font-black tracking-tight" style="font-family: 'Cinzel', serif;">PumpBattle</h1>
+          </div>
+          <nav class="hidden md:flex gap-8 text-sm font-medium text-slate-400">
+            <a href="#" class="hover:text-cyan-400 transition">Battle Arena</a>
+            <a href="#" class="hover:text-cyan-400 transition">Your Cards</a>
+            <a href="#" class="hover:text-cyan-400 transition">Leaderboard</a>
+          </nav>
+          <div class="flex items-center gap-4">
+            <div class="text-right">
+              <p class="text-xs text-slate-500 uppercase tracking-wider">Pot Size</p>
+              <p class="text-lg font-black text-emerald-400">{{ formatNumber(currentPot) }} SOL</p>
+            </div>
+            <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_#10b981]"></div>
+          </div>
+        </div>
+      </header>
+
+      <main class="flex-1 max-w-7xl mx-auto px-6 py-12 w-full">
+        <div class="grid lg:grid-cols-2 gap-16 items-start">
+          <!-- Left: Card Generator -->
+          <section class="space-y-8">
+            <div class="bg-slate-900/60 border border-slate-800 rounded-3xl p-8 backdrop-blur-sm">
+              <h2 class="text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">1. Create Your Card</h2>
+              <div class="space-y-6">
+                <div>
+                  <label class="block text-sm font-medium text-slate-400 mb-2">Upload Artwork</label>
+                  <label class="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-slate-600 rounded-2xl cursor-pointer hover:border-cyan-400 hover:bg-slate-800/50 transition-all group">
+                    <div class="text-center py-8">
+                      <svg class="w-12 h-12 mx-auto mb-3 text-slate-500 group-hover:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                      <p class="text-slate-400 group-hover:text-cyan-300 font-medium">Click to upload</p>
+                      <p class="text-slate-600 text-sm">PNG, JPG up to 10MB</p>
+                    </div>
+                    <input type="file" class="hidden" accept="image/*" @change="handleImageUpload" />
+                  </label>
+                </div>
+
+                <div v-if="imagePreview" class="mt-4">
+                  <img :src="imagePreview" class="w-full h-48 object-cover rounded-xl border border-slate-700" />
+                </div>
+
+                <div>
+                  <label class="block text-sm font-medium text-slate-400 mb-2">Card Name</label>
+                  <input v-model="cardName" type="text" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="e.g. Diamond Hands" />
+                </div>
+
+                <div>
+                  <label class="block text-sm font-medium text-slate-400 mb-2">Description</label>
+                  <textarea v-model="cardDescription" rows="3" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-cyan-500" placeholder="Flavor text..."></textarea>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                  <div>
+                    <label class="block text-sm font-medium text-slate-400 mb-2">Attack</label>
+                    <input v-model.number="cardAttack" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-slate-400 mb-2">Defense</label>
+                    <input v-model.number="cardDefense" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                  </div>
+                </div>
+
+                <div>
+                  <label class="block text-sm font-medium text-slate-400 mb-2">Rarity</label>
+                  <select v-model="cardRarity" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                    <option value="common">Common</option>
+                    <option value="uncommon">Uncommon</option>
+                    <option value="rare">Rare</option>
+                    <option value="epic">Epic</option>
+                    <option value="legendary">Legendary</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="mt-8 pt-6 border-t border-slate-800">
+                <button @click="generateCard" :disabled="!imagePreview" class="w-full bg-gradient-to-r from-cyan-700 to-blue-700 hover:from-cyan-600 hover:to-blue-600 disabled:from-slate-700 disabled:to-slate-700 text-white font-bold py-4 px-6 rounded-xl transition-all transform hover:scale-[1.01] active:scale-[0.99] shadow-lg mb-4">
+                  <span v-if="isGenerating" class="flex items-center justify-center gap-3">
+                    <svg class="animate-spin w-5 h-5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    Generating...
+                  </span>
+                  <span v-else>Generate Card</span>
+                </button>
+
+                <div class="grid grid-cols-2 gap-4">
+                  <button @click="downloadCard" :disabled="!downloadReady" class="w-full bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white font-medium py-3 px-6 rounded-xl transition">
+                    Download PNG
+                  </button>
+                  <button @click="launchToken" :disabled="!canLaunch" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-600 disabled:from-slate-700 disabled:to-slate-700 text-white font-bold py-3 px-6 rounded-xl transition-all transform hover:scale-[1.01] active:scale-[0.99] shadow-lg">
+                    {{ launchStatus || 'Launch on Pump.fun' }}
+                  </button>
+                </div>
+              </div>
+
+              <div v-if="launchResult" class="mt-6 p-4 bg-slate-800/80 rounded-xl border border-slate-700">
+                <p class="text-sm text-slate-400 mb-1">Token Mint</p>
+                <p class="text-cyan-400 font-mono text-sm break-all">{{ launchResult.mint }}</p>
+                <p class="mt-2 text-xs text-slate-500">Your card is now live on Pump.fun! The treasury provided 0.1 SOL liquidity. Good luck in the battle!</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- Right: Preview & Leaderboard -->
+          <section class="space-y-8">
+            <!-- Card Preview -->
+            <div class="bg-slate-900/60 border border-slate-800 rounded-3xl p-8 backdrop-blur-sm">
+              <h2 class="text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 to-blue-500">2. Preview</h2>
+              <div class="flex justify-center py-4">
+                <div id="tcg-card-preview" class="tcg-card" :style="cardStyle">
+                  <div class="card-glow" :style="{ '--glow-color': glowColor }"></div>
+                  <div class="cost-badge">{{ Math.floor(cardAttack / 100) }}</div>
+                  <div class="type-badge-container"><div class="type-badge" v-if="cardType">{{ cardType }}</div></div>
+                  <div class="rarity-badge" :style="{ '--rarity-color': rarityColors[cardRarity] }">{{ getRarityShort(cardRarity) }}</div>
+                  <div class="image-frame"><img v-if="imagePreview" :src="imagePreview" alt="Card art" /></div>
+                  <h3 class="card-title">{{ cardName }}</h3>
+                  <div class="card-subtitle">{{ getRarityFull(cardRarity) }}</div>
+                  <div v-if="cardAbility" class="ability-box">✦ {{ cardAbility }} ✦</div>
+                  <div v-if="cardResistance" class="resistance-box">
+                    <span class="resistance-label">{{ cardResistance.name }}</span>
+                    <span class="resistance-value">{{ cardResistance.value }}</span>
+                  </div>
+                  <p class="card-description">{{ cardDescription }}</p>
+                  <div class="stats-bar">
+                    <div class="stat-box"><div class="stat-label">ATK</div><div class="stat-value">{{ cardAttack }}</div></div>
+                    <div class="stat-box"><div class="stat-label">DEF</div><div class="stat-value">{{ cardDefense }}</div></div>
+                  </div>
+                  <div class="edition-number">#{{ getEditionNumber() }}</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Leaderboard -->
+            <div class="bg-slate-900/60 border border-slate-800 rounded-3xl p-8 backdrop-blur-sm">
+              <h2 class="text-2xl font-bold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-orange-500">Leaderboard</h2>
+              <div v-if="loading" class="text-center py-12 text-slate-500">Loading battle data...</div>
+              <div v-else class="space-y-4">
+                <div v-for="(token, idx) in leaderboard" :key="token.ticker" class="flex items-center gap-4 p-4 bg-slate-800/60 rounded-xl border border-slate-700 hover:border-cyan-500 transition">
+                  <div class="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center font-black text-white text-sm shadow">{{ idx + 1 }}</div>
+                  <img :src="token.imageUrl" class="w-12 h-12 rounded-lg object-cover border border-slate-600" />
+                  <div class="flex-1">
+                    <p class="font-bold text-white">{{ token.ticker }}</p>
+                    <p class="text-xs text-slate-500 truncate max-w-[160px]">{{ token.name }}</p>
+                  </div>
+                  <div class="text-right">
+                    <p class="font-mono text-emerald-400 font-bold">{{ formatNumber(token.marketCap) }} SOL</p>
+                    <p class="text-xs text-slate-500">Market Cap</p>
+                  </div>
+                </div>
+                <div v-if="leaderboard.length === 0" class="text-center py-8 text-slate-500">No tokens launched yet. Be the first!</div>
+              </div>
+              <div class="mt-6 pt-4 border-t border-slate-800 flex justify-between items-center">
+                <p class="text-sm text-slate-400">Round ends in <span class="font-mono text-cyan-400">{{ formatTime(timeLeft) }}</span></p>
+                <p class="text-sm text-slate-400">Winner takes all <span class="text-emerald-400 font-bold">{{ formatNumber(potAmount) }} SOL</span></p>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
+
+      <footer class="border-t border-slate-800 py-8 mt-12 bg-slate-900/80">
+        <div class="max-w-7xl mx-auto px-6 text-center text-slate-500 text-sm">
+          <p>PumpBattle — Create cards, launch tokens, battle for the prize pool.</p>
+          <p class="mt-2 text-xs">Built on Solana · Powered by Pump.fun</p>
+        </div>
+      </footer>
+    </div>
+
+  </body>
+</html>
