@@ -1,5 +1,5 @@
 import web3 from '@solana/web3.js';
-import { PumpSdk } from '@pump-fun/pump-sdk';
+import { Pump } from '@pump-fun/pump-sdk';
 
 const { Connection, Keypair, PublicKey, Transaction, LAMPORTS_PER_SOL, SystemProgram, BN } = web3;
 
@@ -24,7 +24,7 @@ export async function getPump() {
   } else {
     keypair = Keypair.fromBase58(treasuryKeyStr);
   }
-  pumpInstance = new PumpSdk(connection);
+  pumpInstance = new Pump(connection);
   // Attach the treasury keypair for signing
   pumpInstance.treasuryKeypair = keypair;
   return pumpInstance;
