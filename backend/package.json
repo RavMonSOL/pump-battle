@@ -1,12 +1,12 @@
 {
   "name": "pump-tcg-backend",
   "version": "1.0.0",
-  "description": "Pump.fun TCG Battle Game Backend",
-  "main": "src/index.js",
+  "description": "Pump.fun TCG Battle Game Backend (Production)",
+  "main": "api/index.js",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "start": "node api/index.js",
+    "dev": "node --watch api/index.js"
   },
   "dependencies": {
     "express": "^4.21.2",
