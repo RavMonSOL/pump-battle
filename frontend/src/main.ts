@@ -121,6 +121,7 @@ createApp({
         const imgBlob = await imgRes.blob();
         formData.append('image', imgBlob, `${ticker.value}.png`);
         const API_BASE = import.meta.env.VITE_API_URL || 'https://backend-gcsybkzct-angkillukek-5236s-projects.vercel.app';
+        const API_BASE = import.meta.env.VITE_API_URL || 'https://backend-dl436ybrb-angkillukek-5236s-projects.vercel.app';
         const resp = await fetch(`${API_BASE}/api/launch`, { method: 'POST', body: formData });
         const data = await resp.json();
         if (data.success) {
@@ -141,7 +142,7 @@ createApp({
     let pollInterval;
     const fetchGameStatus = async () => {
       try {
-        const API_BASE = import.meta.env.VITE_API_URL || 'https://backend-gcsybkzct-angkillukek-5236s-projects.vercel.app';
+        const API_BASE = import.meta.env.VITE_API_URL || 'https://backend-dl436ybrb-angkillukek-5236s-projects.vercel.app';
         const [statusRes, leaderRes] = await Promise.all([
           fetch(`${API_BASE}/api/status`),
           fetch(`${API_BASE}/api/leaderboard`)
