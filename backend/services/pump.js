@@ -1,5 +1,5 @@
 import web3 from '@solana/web3.js';
-import { Pump } from '@pump-fun/pump-sdk';
+import { PumpSdk } from '@pump-fun/pump-sdk';
 
 const { Connection, Keypair, PublicKey, Transaction, LAMPORTS_PER_SOL, SystemProgram, BN } = web3;
 
