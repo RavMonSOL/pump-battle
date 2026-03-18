@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 import multer from 'multer';
 import { promises as fs } from 'fs';
 import { fileURLToPath } from 'url';
@@ -13,16 +14,13 @@ const __dirname = dirname(__filename);
 
 const app = express();
 
-// Manual CORS — set headers on EVERY request, before anything else
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-  next();
-});
+// CORS first — applies to ALL routes and responses
+app.use(cors({
+  origin: true, // reflect request origin or '*'
+  credentials: false,
+  methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization']
+}));
 
 app.use(express.json());
 
@@ -152,7 +150,7 @@ app.get('/api/token/:mint', async (req, res) => {
   }
 });
 
-// 404 fallback (CORS already set above)
+// Fallback 404 (CORS already applied)
 app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
