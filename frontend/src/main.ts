@@ -31,6 +31,8 @@ createApp({
 
     // Backend API base URL (configurable via VITE_API_URL)
     const API_BASE = import.meta.env.VITE_API_URL || 'https://backend-dl436ybrb-angkillukek-5236s-projects.vercel.app';
+    // Vercel bypass header for protected deployments (optional)
+    const BYPASS_HEADER = import.meta.env.VITE_VERCEL_BYPASS || 'vs5gGiRjZXSRwUQ3IgX9hpEE3j7BpEGC';
 
     // Helper methods
     const handleImageUpload = (event) => {
@@ -121,7 +123,11 @@ createApp({
         const imgRes = await fetch(generatedImage.value);
         const imgBlob = await imgRes.blob();
         formData.append('image', imgBlob, `${ticker.value}.png`);
-        const resp = await fetch(`${API_BASE}/api/launch`, { method: 'POST', body: formData });
+        const resp = await fetch(`${API_BASE}/api/launch`, {
+          method: 'POST',
+          body: formData,
+          headers: { 'x-vercel-protection-bypass': BYPASS_HEADER }
+        });
         const data = await resp.json();
         if (data.success) {
           launchResult.value = data;
@@ -142,8 +148,8 @@ createApp({
     const fetchGameStatus = async () => {
       try {
         const [statusRes, leaderRes] = await Promise.all([
-          fetch(`${API_BASE}/api/status`),
-          fetch(`${API_BASE}/api/leaderboard`)
+          fetch(`${API_BASE}/api/status`, { headers: { 'x-vercel-protection-bypass': BYPASS_HEADER } }),
+          fetch(`${API_BASE}/api/leaderboard`, { headers: { 'x-vercel-protection-bypass': BYPASS_HEADER } })
         ]);
         const status = await statusRes.json();
         const lead = await leaderRes.json();
