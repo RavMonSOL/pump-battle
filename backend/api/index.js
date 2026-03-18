@@ -25,7 +25,11 @@ app.use(cors({
 app.use(express.json());
 
 const uploadsDir = process.env.UPLOADS_DIR || join('/tmp', 'pump-tcg-uploads');
-await fs.mkdir(uploadsDir, { recursive: true });
+try {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+} catch (e) {
+  console.error('Failed to create uploads directory:', e);
+}
 app.use('/uploads', express.static(uploadsDir));
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -155,6 +159,10 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Not found' });
 });
 
-roundEndingScheduler();
+try {
+  roundEndingScheduler();
+} catch (e) {
+  console.error('Failed to start round scheduler:', e);
+}
 
 export default app;
