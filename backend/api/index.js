@@ -5,69 +5,44 @@ import { promises as fs } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import cron from 'node-cron';
-import Database from 'better-sqlite3';
 import { uploadToIPFS } from '../services/ipfs.js';
 import { createTokenOnPump, getTokenMarketData } from '../services/pump.js';
+import * as store from '../services/store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Ensure uploads directory exists (use /tmp for Vercel serverless)
-const uploadsDir = process.env.UPLOADS_DIR || join('/tmp', 'pump-tcg-uploads');
-await fs.mkdir(uploadsDir, { recursive: true });
-
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const uploadsDir = process.env.UPLOADS_DIR || join('/tmp', 'pump-tcg-uploads');
+await fs.mkdir(uploadsDir, { recursive: true });
 app.use('/uploads', express.static(uploadsDir));
 
-// Database in /tmp (Vercel persists across requests, not restarts)
-const dbPath = process.env.DATABASE_PATH || join('/tmp', 'game.db');
-const db = new Database(dbPath);
-db.exec(`
-  CREATE TABLE IF NOT EXISTS tokens (
-    mint TEXT PRIMARY KEY,
-    ticker TEXT UNIQUE,
-    name TEXT,
-    description TEXT,
-    image_url TEXT,
-    metadata_uri TEXT,
-    launch_time INTEGER,
-    round_id INTEGER,
-    market_cap REAL DEFAULT 0,
-    total_supply INTEGER DEFAULT 0,
-    bond_curve TEXT,
-    status TEXT DEFAULT 'active'
-  );
-  CREATE TABLE IF NOT EXISTS rounds (
-    round_id INTEGER PRIMARY KEY,
-    start_time INTEGER NOT NULL,
-    end_time INTEGER NOT NULL,
-    pot_amount REAL DEFAULT 0,
-    winner_mint TEXT,
-    distribution_tx TEXT,
-    status TEXT DEFAULT 'open'
-  );
-  CREATE INDEX IF NOT EXISTS idx_tokens_round ON tokens(round_id);
-`);
+const upload = multer({ storage: multer.memoryStorage() });
 
-function getCurrentRound() {
-  const now = Date.now();
-  const round = db.prepare('SELECT * FROM rounds WHERE status = "open" ORDER BY round_id DESC LIMIT 1').get();
+async function getCurrentRound() {
+  let round = await store.getOpenRound();
   if (!round) {
+    const now = Date.now();
     const roundId = Math.floor(now / (24 * 60 * 60 * 1000));
-    const start = now;
-    const end = start + 24 * 60 * 60 * 1000;
-    db.prepare('INSERT INTO rounds (round_id, start_time, end_time) VALUES (?, ?, ?)').run(roundId, start, end);
-    return db.prepare('SELECT * FROM rounds WHERE round_id = ?').get(roundId);
+    round = {
+      round_id: roundId,
+      start_time: now,
+      end_time: now + 24 * 60 * 60 * 1000,
+      pot_amount: 0,
+      status: 'open'
+    };
+    await store.upsertRound(round);
   }
   return round;
 }
 
-function roundEndingScheduler() {
+async function roundEndingScheduler() {
   cron.schedule('*/5 * * * *', async () => {
     const now = Date.now();
-    const openRounds = db.prepare('SELECT * FROM rounds WHERE status = "open" AND end_time <= ?').all(now);
+    const openRounds = (await store.getAllRounds()).filter(r => r.status === 'open' && r.end_time <= now);
     for (const round of openRounds) {
       await settleRound(round);
     }
@@ -76,34 +51,31 @@ function roundEndingScheduler() {
 
 async function settleRound(round) {
   console.log(`Settling round ${round.round_id}`);
-  const tokens = db.prepare('SELECT * FROM tokens WHERE round_id = ?').all(round.round_id);
+  const tokens = await store.getTokensByRound(round.round_id);
   if (tokens.length === 0) {
-    db.prepare('UPDATE rounds SET status = "closed" WHERE round_id = ?').run(round.round_id);
+    await store.upsertRound({ ...round, status: 'closed' });
     return;
   }
-  // Refresh market caps
   let winner = tokens[0];
   for (const token of tokens) {
     if (token.status === 'active') {
       try {
         const market = await getTokenMarketData(token.mint);
         if (market && market.marketCap > 0) {
-          db.prepare('UPDATE tokens SET market_cap = ? WHERE mint = ?').run(market.marketCap, token.mint);
+          await store.updateToken(token.mint, { market_cap: market.marketCap });
           if (market.marketCap > (winner.market_cap || 0)) winner = token;
         }
       } catch (e) {
-        console.error(`Failed to fetch market for ${token.ticker}:`, e);
+        console.error(`Failed market fetch for ${token.ticker}:`, e);
       }
-    } else if (token.market_cap > (winner.market_cap || 0)) {
+    } else if ((token.market_cap || 0) > (winner.market_cap || 0)) {
       winner = token;
     }
   }
-  db.prepare('UPDATE rounds SET status = "closed", winner_mint = ? WHERE round_id = ?').run(winner.mint, round.round_id);
+  await store.upsertRound({ ...round, status: 'closed', winner_mint: winner.mint });
   console.log(`Winner: ${winner.ticker} (${winner.mint})`);
-  // TODO: trigger airdrop distribution off-chain or via pump SDK
+  // TODO: airdrop distribution
 }
-
-const upload = multer({ storage: multer.memoryStorage() });
 
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: Date.now() }));
 
@@ -117,10 +89,9 @@ app.post('/api/launch', upload.single('image'), async (req, res) => {
     if (!/^[A-Z0-9]{3,5}$/.test(ticker)) {
       return res.status(400).json({ error: 'Invalid ticker format' });
     }
-    const existing = db.prepare('SELECT * FROM tokens WHERE ticker = ?').get(ticker);
+    const existing = await store.getTokenByTicker(ticker);
     if (existing) return res.status(409).json({ error: 'Ticker already in use' });
 
-    // Upload image to IPFS
     let imageCid, metadataCid, imageUrl;
     try {
       imageCid = await uploadToIPFS(imageFile.buffer, `${ticker}-${Date.now()}.png`);
@@ -142,7 +113,6 @@ app.post('/api/launch', upload.single('image'), async (req, res) => {
       imageUrl = `/uploads/${fallbackName}`;
     }
 
-    // Create token on Pump.fun
     const pumpResult = await createTokenOnPump({
       name,
       symbol: ticker,
@@ -152,11 +122,21 @@ app.post('/api/launch', upload.single('image'), async (req, res) => {
     });
 
     const now = Date.now();
-    const round = getCurrentRound();
-    db.prepare(`
-      INSERT INTO tokens (mint, ticker, name, description, image_url, metadata_uri, launch_time, round_id, bond_curve, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
-    `).run(pumpResult.mintAddress, ticker, name, description, imageUrl, metadataCid || null, now, round.round_id, pumpResult.bondCurve);
+    const round = await getCurrentRound();
+    await store.insertToken({
+      mint: pumpResult.mintAddress,
+      ticker,
+      name,
+      description,
+      image_url: imageUrl,
+      metadata_uri: metadataCid || null,
+      launch_time: now,
+      round_id: round.round_id,
+      bond_curve: pumpResult.bondCurve,
+      status: 'active',
+      market_cap: 0,
+      total_supply: 0
+    });
 
     console.log(`Token ${ticker} launched on Pump.fun: ${pumpResult.mintAddress}`);
     res.json({
@@ -175,28 +155,28 @@ app.post('/api/launch', upload.single('image'), async (req, res) => {
   }
 });
 
-app.get('/api/status', (req, res) => {
-  const round = getCurrentRound();
-  const tokens = db.prepare('SELECT * FROM tokens WHERE round_id = ? ORDER BY market_cap DESC LIMIT 10').all(round.round_id);
+app.get('/api/status', async (req, res) => {
+  const round = await getCurrentRound();
+  const tokens = (await store.getTokensByRound(round.round_id)).sort((a,b) => (b.market_cap||0) - (a.market_cap||0)).slice(0,10);
   res.json({
     roundId: round.round_id,
     timeLeft: round.end_time - Date.now(),
     potAmount: round.pot_amount,
-    tokenCount: db.prepare('SELECT COUNT(*) as c FROM tokens WHERE round_id = ?').get(round.round_id).c,
-    topTokens: tokens.map(t => ({ ticker: t.ticker, name: t.name, marketCap: t.market_cap, imageUrl: t.image_url }))
+    tokenCount: (await store.getTokensByRound(round.round_id)).length,
+    topTokens: tokens.map(t => ({ ticker: t.ticker, name: t.name, marketCap: t.market_cap || 0, imageUrl: t.image_url }))
   });
 });
 
-app.get('/api/leaderboard', (req, res) => {
-  const round = getCurrentRound();
-  const tokens = db.prepare('SELECT * FROM tokens WHERE round_id = ? ORDER BY market_cap DESC').all(round.round_id);
+app.get('/api/leaderboard', async (req, res) => {
+  const round = await getCurrentRound();
+  const tokens = (await store.getTokensByRound(round.round_id)).sort((a,b) => (b.market_cap||0) - (a.market_cap||0));
   res.json({
     roundId: round.round_id,
     tokens: tokens.map((t, idx) => ({
       rank: idx + 1,
       ticker: t.ticker,
       name: t.name,
-      marketCap: t.market_cap,
+      marketCap: t.market_cap || 0,
       imageUrl: t.image_url
     }))
   });
@@ -204,7 +184,7 @@ app.get('/api/leaderboard', (req, res) => {
 
 app.get('/api/token/:mint', async (req, res) => {
   const { mint } = req.params;
-  const token = db.prepare('SELECT * FROM tokens WHERE mint = ?').get(mint);
+  const token = await store.getTokenByMint(mint);
   if (!token) return res.status(404).json({ error: 'Token not found' });
   try {
     const market = await getTokenMarketData(mint);
