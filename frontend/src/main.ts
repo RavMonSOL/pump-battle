@@ -32,7 +32,10 @@ createApp({
     // Backend API base URL (configurable via VITE_API_URL)
     const API_BASE = import.meta.env.VITE_API_URL || 'https://backend-pearl-omega-33.vercel.app';
     // Vercel bypass header for protected deployments (optional)
+    // Vercel bypass header for protected deployments
+    // If you need to override, set VITE_VERCEL_BYPASS in Vercel env vars.
     const BYPASS_HEADER = import.meta.env.VITE_VERCEL_BYPASS || 'vs5gGiRjZXSRwUQ3IgX9hpEE3j7BpEGC';
+    console.log('BYPASS_HEADER set to:', BYPASS_HEADER);
 
     // Helper methods
     const handleImageUpload = (event) => {
