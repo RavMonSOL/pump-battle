@@ -30,7 +30,7 @@ createApp({
     const tickerInput = ref('');
 
     // Backend API base URL (configurable via VITE_API_URL)
-    const API_BASE = import.meta.env.VITE_API_URL || 'https://backend-dl436ybrb-angkillukek-5236s-projects.vercel.app';
+    const API_BASE = import.meta.env.VITE_API_URL || 'https://backend-pearl-omega-33.vercel.app';
     // Vercel bypass header for protected deployments (optional)
     const BYPASS_HEADER = import.meta.env.VITE_VERCEL_BYPASS || 'vs5gGiRjZXSRwUQ3IgX9hpEE3j7BpEGC';
 
